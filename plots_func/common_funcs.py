@@ -19,13 +19,10 @@ def get_acc_loss(
     sampling_types=[
         "random",
         "clustered_2",
-        "clustered_2",
-        "clustered_2",
-        "perfect",
         "clustered_1",
-        "FedAvg",
+        "MBUT2-10-0"
     ],
-    similarities=["any", "L2", "L1", "cosine", "any", "any", "any"],
+    similarities=["any", "cosine", "any", "any"],
     names_legend=["MD", "L2", "L1", "Alg. 2", "Target", "Alg. 1", "FedAvg"],
 ):
 
@@ -47,7 +44,7 @@ def get_acc_loss(
     for sampling, sampling_type, name in zip(
         sampling_types, similarities, names_legend
     ):
-
+        # 尝试读取拥有相同seed, n_SGD, lr, decay, p, mu值，不同客户端选择方法的acc，loss或者sampled_clients
         try:
             hist = get_one_acc_loss(sampling, sampling_type)
 

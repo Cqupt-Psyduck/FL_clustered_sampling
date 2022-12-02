@@ -9,15 +9,19 @@ import pickle as pkl
 from plots_func.common_funcs import get_acc_loss
 
 
-names_legend = [
-    "MD",
-    "Alg. 2 L2",
-    "Alg. 2 L1",
-    "Alg. 2",
-    "Target",
-    "Alg. 1",
-    "FedAvg",
-]
+# names_legend = [
+#     "MD",
+#     "Alg. 2 L2",
+#     "Alg. 2 L1",
+#     "Alg. 2",
+#     "Target",
+#     "Alg. 1",
+#     "FedAvg",
+#     "MBUT1-5-0",
+#     "MBUT2-10-0"
+# ]
+
+names_legend = ["MD-CS", "LVIR-MS", "LVIR-SN", "MBUT-CS"]
 
 
 def get_n_diff_types(hist_sampled_clients, sampling_type: str, iter_max: int):
@@ -92,7 +96,9 @@ def plot_fig_alg2(
 
     print(legend)
 
-    kept = ["MD", "Target", "Alg. 1", "Alg. 2"]
+    # 实际只画kept有的
+    # kept = ["MD", "Target", "Alg. 1", "Alg. 2", "MBUT"]
+    kept = ["MD-CS", "LVIR-SN", "LVIR-MS", "MBUT-CS"]
 
     idx_kept = [legend.index(title_simu) for title_simu in kept]
 
@@ -168,4 +174,4 @@ def plot_fig_alg2(
         ncol=2,
         bbox_to_anchor=(1.0, 0.9),
     )
-    plt.savefig(f"plots/plot_fig_improved_MNIST.pdf")
+    plt.savefig(f"plots/plot_fig_improved_MNIST_200_3.pdf")

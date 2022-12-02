@@ -164,10 +164,13 @@ if sampling == "FedAvg" and (
     )
 
 """FEDAVG with MBUT sampling"""
-if sampling == "MBUT" and (
+if sampling[:4] == "MBUT" and (
     not os.path.exists(f"saved_exp_info/acc/{file_name}.pkl") or force
 ):
-
+    config = sampling[4:].split("-")
+    bal_num = int(config[0])
+    cluster_num = int(config[1])
+    sigma = float(config[2])
     from py_func.FedProx import FedProx_MBUT_sampling
     from py_func.ClassDistribution import get_auxiliary_data_loader
     aux_data = get_auxiliary_data_loader(dataset)
@@ -177,6 +180,39 @@ if sampling == "MBUT" and (
         list_dls_train,
         list_dls_test,
         aux_data,
+        bal_num,
+        cluster_num,
+        sigma,
+        n_iter,
+        n_SGD,
+        lr,
+        file_name,
+        decay,
+        meas_perf_period,
+        mu,
+    )
+
+"""FEDAVG with MBUT-UCB sampling"""
+if sampling[:8] == "UCB-MBUT" and (
+        not os.path.exists(f"saved_exp_info/acc/{file_name}.pkl") or force
+):
+    config = sampling[8:].split("-")
+    bal_num = int(config[0])
+    cluster_num = int(config[1])
+    sigma = float(config[2])
+    from py_func.FedProx import FedProx_UCB_MBUT_sampling
+    from py_func.ClassDistribution import get_auxiliary_data_loader
+
+    aux_data = get_auxiliary_data_loader(dataset)
+    FedProx_UCB_MBUT_sampling(
+        model_0,
+        n_sampled,
+        list_dls_train,
+        list_dls_test,
+        aux_data,
+        bal_num,
+        cluster_num,
+        sigma,
         n_iter,
         n_SGD,
         lr,

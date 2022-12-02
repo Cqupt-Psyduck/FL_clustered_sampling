@@ -14,6 +14,7 @@ import random
 
 from ClassDistribution import compute_ratio_per_client_update
 from PAMImp import PAM
+from py_func.MBUT import sample_clients_by_MBUT
 
 torch.backends.cudnn.benchmark = True
 use_cuda = torch.cuda.is_available()
@@ -771,6 +772,9 @@ def FedProx_MBUT_sampling(
         training_sets: list,
         testing_sets: list,
         aux_data,
+        bal_num: int,
+        cluster_num: int,
+        sigma: float,
         n_iter: int,
         n_SGD: int,
         lr,
@@ -840,53 +844,7 @@ def FedProx_MBUT_sampling(
         if i < RR:
             sampled_clients = traverse(K, n_sampled, i)
         else:
-            # MBUT采样
-            cluster = 5
-            normalized_attr = preprocessing.scale(clients_attr)
-            medoids = PAM(normalized_attr, cluster)
-            center = np.zeros(len(clients_attr[0]))
-            for j in range(cluster):
-                center = center + (len(medoids[j]) / K) * normalized_attr[medoids['cen_idx'][j]]
-            center = center / cluster
-            clu_distance = [np.sum(np.square(normalized_attr[medoid] - center)) for medoid in medoids['cen_idx']]
-            balance_cluster = clu_distance.index(min(clu_distance))
-
-            places = [0] * cluster
-            balance_places = min(np.ceil(n_sampled * medoids["len"][balance_cluster] / K), medoids["len"][balance_cluster])
-            tilt_places = n_sampled - balance_places
-
-            places[balance_cluster] = balance_places
-            tilt_clusters_clients_number = np.sum(medoids["len"]) - medoids["len"][balance_cluster]
-            remainder = [0] * cluster
-            sum_minus = 0
-            for j in range(cluster):
-                if j != balance_cluster:
-                    remainder[j], places[j] = np.modf(tilt_places * medoids["len"][j] / tilt_clusters_clients_number)
-                    sum_minus = sum_minus + places[j]
-            sum_minus = tilt_places - sum_minus
-            for _ in range(int(sum_minus)):
-                j = remainder.index(max(remainder))
-                places[j] = places[j] + 1
-                remainder[j] = 0
-            cluster_weights = []
-            sampled_clients = np.array([])
-            for j in range(cluster):
-                cluster_weights.append(np.array([len(training_sets[client_idx].dataset) for client_idx in medoids[j]]))
-                cluster_weights[j] = cluster_weights[j] / np.sum(cluster_weights[j])
-                sampled_clients = np.hstack([sampled_clients, np.random.choice(
-                    medoids[j], size=int(places[j]), replace=False, p=cluster_weights[j]
-                )])
-            sampled_clients = sampled_clients.astype(int)
-
-
-        # # MBUT采样
-        # if i == 0:
-        #     np.random.seed(i)
-        #     sampled_clients = np.random.choice(
-        #         K, size=n_sampled, replace=False, p=weights
-        #     )
-        # else:
-        #     pass
+            sampled_clients = sample_clients_by_MBUT(clients_attr, n_samples, bal_num, cluster_num, n_sampled, sigma)
 
         clients_models = []
         # 选择出来的客户端轮流开始训练
@@ -932,6 +890,188 @@ def FedProx_MBUT_sampling(
             for j in range(0, len(params), 2):
                 client_j_param = np.hstack([params[j].cpu().numpy().ravel(), params[j + 1].cpu().numpy().ravel()])
                 old_global_j_param = np.hstack([old_global_params[j].cpu().numpy().ravel(), old_global_params[j + 1].cpu().numpy().ravel()])
+                trans_params[j // 2].append(client_j_param - old_global_j_param)
+        # 标准化
+        # for j, params in enumerate(trans_params):
+        #     trans_params[j] = preprocessing.scale(params)
+
+        # 所有客户端的第一层一起pca降维，第二层即后续层同样
+        if i == 0:
+            for params in trans_params:
+                list_pca.append(PCA(n_components=1).fit(params))
+        for j, params in enumerate(trans_params):
+            for k, attr in enumerate(list_pca[j].transform(params)):
+                clients_weight_attr[k][j] = attr[0]
+        # 本轮联邦学习参与模型训练的客户端提取出来的特征
+        sampled_clients_attr = np.hstack([clients_class_attr, clients_weight_attr])
+        for j, k in enumerate(sampled_clients):
+            clients_attr[k] = sampled_clients_attr[j]
+
+        # CREATE THE NEW GLOBAL MODEL 服务器聚合局部模型的参数clients_params，
+        model = FedAvg_agregation_process(
+            deepcopy(model), clients_params, weights=[1 / n_sampled] * n_sampled
+        )
+
+        # metric_period度量周期，每隔metric_period个联邦训练轮次计算一次全局模型在各个客户端数据集上的loss和acc并聚合为全局loss和acc输出
+        if i % metric_period == 0:
+            # COMPUTE THE LOSS/ACCURACY OF THE DIFFERENT CLIENTS WITH THE NEW MODEL
+            for k, dl in enumerate(training_sets):
+                loss_hist[i + 1, k] = float(
+                    loss_dataset(model, dl, loss_f).detach()
+                )
+
+            for k, dl in enumerate(testing_sets):
+                acc_hist[i + 1, k] = accuracy_dataset(model, dl)
+
+            server_loss = np.dot(weights, loss_hist[i + 1])
+            server_acc = np.dot(weights, acc_hist[i + 1])
+
+            print(
+                f"====> i: {i + 1} Loss: {server_loss} Server Test Accuracy: {server_acc}"
+            )
+
+        # DECREASING THE LEARNING RATE AT EACH SERVER ITERATION 学习率衰减，默认decay为1即不衰减
+        lr *= decay
+
+    # SAVE THE DIFFERENT TRAINING HISTORY
+    #    save_pkl(models_hist, "local_model_history", file_name)
+    #    save_pkl(server_hist, "server_history", file_name)
+    save_pkl(loss_hist, "loss", file_name)
+    save_pkl(acc_hist, "acc", file_name)
+    save_pkl(sampled_clients_hist, "sampled_clients", file_name)
+
+    torch.save(
+        model.state_dict(), f"saved_exp_info/final_model/{file_name}.pth"
+    )
+
+
+def FedProx_UCB_MBUT_sampling(
+        model,
+        n_sampled,
+        training_sets: list,
+        testing_sets: list,
+        aux_data,
+        bal_num: int,
+        cluster_num: int,
+        sigma: float,
+        n_iter: int,
+        n_SGD: int,
+        lr,
+        file_name: str,
+        decay=1,
+        metric_period=1,
+        mu=0,
+):
+    """all the clients are considered in this implementation of FedProx
+    Parameters:
+        - `model`: common structure used by the clients and the server
+        - `training_sets`: list of the training sets. At each index is the
+            trainign set of client "index"
+        - `n_iter`: number of iterations the server will run
+        - `testing_set`: list of the testing sets. If [], then the testing
+            accuracy is not computed
+        - `mu`: regularixation term for FedProx. mu=0 for FedAvg
+        - `epochs`: number of epochs each client is running
+        - `lr`: learning rate of the optimizer
+        - `decay`: to change the learning rate at each iteration
+
+    returns :
+        - `model`: the final global model
+    """
+    # 获得计算分类模型损失的函数
+    loss_f = loss_classifier
+
+    # 根据客户端的样本数量计算初始的客户端聚合权重
+    K = len(training_sets)  # number of clients
+    n_samples = np.array([len(db.dataset) for db in training_sets])
+    weights = n_samples / np.sum(n_samples)
+    print("Clients' weights:", weights)
+
+    # 记录每轮客户端模型的损失和精确度
+    loss_hist = np.zeros((n_iter + 1, K))
+    acc_hist = np.zeros((n_iter + 1, K))
+
+    # 记录初始模型在各个客户端训练集上的损失和精度
+    for k, dl in enumerate(training_sets):
+        loss_hist[0, k] = float(loss_dataset(model, dl, loss_f).detach())
+        acc_hist[0, k] = accuracy_dataset(model, dl)
+
+    # LOSS AND ACCURACY OF THE INITIAL MODEL 服务器损失和精度
+    server_loss = np.dot(weights, loss_hist[0])
+    server_acc = np.dot(weights, acc_hist[0])
+    print(f"====> i: 0 Loss: {server_loss} Test Accuracy: {server_acc}")
+
+    # 记录每轮参与训练的客户端，参与为1，未参与为0
+    sampled_clients_hist = np.zeros((n_iter, K)).astype(int)
+
+    # 开始训练，i为轮数范围为0~n_iter-1
+    # 存储用来降维的pca模型
+    list_pca = []
+    # 初始化每个客户端的聚类特征
+    clients_attr = [np.hstack([np.ones(10)/10, np.zeros(len(list(model.parameters())) // 2)]) for _ in range(K)]
+    # 初始化每个客户端的资源特征
+    clients_resource_attr = [[1., 1., 1., 1., 1.] for _ in range(70)] + \
+                            [[0.7, 0.7, 0.7, 0.7, 1.] for _ in range(20)] + \
+                            [[0.5, 0.5, 0.5, 0.5, 1.] for _ in range(10)]
+    for i in range(n_iter):
+
+        clients_params = []
+
+        # MD采样方法选择客户端
+        # np.random.seed(i)
+        # sampled_clients = np.random.choice(
+        #     K, size=n_sampled, replace=True, p=weights
+        # )
+
+        sampled_clients = sample_clients_by_MBUT(clients_attr, n_samples, bal_num, cluster_num, n_sampled,
+                                                 sigma)
+
+
+        clients_models = []
+        # 选择出来的客户端轮流开始训练
+        for k in sampled_clients:
+            # 相当于服务器下发模型
+            local_model = deepcopy(model)
+            # 设置本地客户端的优化器
+            local_optimizer = optim.SGD(local_model.parameters(), lr=lr)
+            # 客户端k开始训练
+            local_learning(
+                local_model,
+                mu,
+                local_optimizer,
+                training_sets[k],
+                n_SGD,
+                loss_f,
+            )
+
+            # GET THE PARAMETER TENSORS OF THE MODEL 获取客户端k在本地数据集上训练后的参数
+            # list_params的结构为神经网络层数（不包括输入层）*2的Tensor（模型要训练的参数），乘2是因为每一层除了要训练的权重参数外还有偏置即神经元的阈值
+            # 排列顺序是从输入层到输出层
+            list_params = list(local_model.parameters())  # 直接读取是物理地址，需要转换成list读取
+            list_params = [tens_param.detach() for tens_param in list_params]
+            clients_params.append(list_params)
+
+            # 记录k客户端参与了第i轮的训练
+            sampled_clients_hist[i, k] = 1
+
+            # 记录每个客户端的model
+            clients_models.append(deepcopy(local_model))
+
+        # 计算参与训练的客户端的类分布
+        clients_class_attr = compute_ratio_per_client_update(clients_models, sampled_clients, aux_data)
+
+        old_global_params = [tens_param.detach() for tens_param in list(model.parameters())]
+
+        # 对所有客户端权重同一层的权重放到一起
+        trans_params = []
+        clients_weight_attr = [[0 for col in range(len(clients_params[0]) // 2)] for row in range(n_sampled)]
+        for j in range(len(clients_params[0]) // 2):
+            trans_params.append([])
+        for params in clients_params:
+            for j in range(0, len(params), 2):
+                client_j_param = np.hstack([params[j].cpu().numpy().ravel(), params[j + 1].cpu().numpy().ravel()])
+                old_global_j_param = np.hstack(
+                    [old_global_params[j].cpu().numpy().ravel(), old_global_params[j + 1].cpu().numpy().ravel()])
                 trans_params[j // 2].append(client_j_param - old_global_j_param)
         # 标准化
         # for j, params in enumerate(trans_params):

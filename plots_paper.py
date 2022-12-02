@@ -5,7 +5,7 @@
 from plots_func.Fig_MNIST_shard import plot_fig_alg2
 
 dataset = "MNIST_shard"
-sampling = "clustered_1"
+sampling = "clustered_1"  # 这个参数实际没用，实际上是读取相同下列参数且相同数据集的所有采样方法得到的结果
 n_SGD = 50
 seed = 0
 lr = 0.01
@@ -17,8 +17,8 @@ n_iter_plot = 200
 plot_fig_alg2(dataset, sampling, n_SGD, seed, lr, decay, p, mu, n_iter_plot)
 
 
-from plots_func.Fig_CIFAR10 import plot_fig_CIFAR10_alpha_effect_one
-
-metric = "loss"
-smooth = True
-plot_fig_CIFAR10_alpha_effect_one(metric, n_SGD, p, mu, smooth)
+# from plots_func.Fig_CIFAR10 import plot_fig_CIFAR10_alpha_effect_one
+#
+# metric = "loss"
+# smooth = True
+# plot_fig_CIFAR10_alpha_effect_one(metric, n_SGD, p, mu, smooth)
