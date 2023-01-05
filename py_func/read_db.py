@@ -140,6 +140,7 @@ class MnistShardDataset(Dataset):
             self.features = np.vstack(dataset[0][k])
 
             vector_labels = list()
+            # dataset[1][k]只包含一个数字，所以循环其实只执行了一轮即idx=0，digit=标签
             for idx, digit in enumerate(dataset[1][k]):
                 vector_labels += [digit] * len(dataset[0][k][idx])
 
@@ -476,3 +477,54 @@ def get_dataloaders(dataset, batch_size: int, shuffle=True):
         pickle.dump(list_len, output)
 
     return list_dls_train, list_dls_test
+
+
+class TaskMnistShardDataset(Dataset):
+    """Convert the MNIST pkl file into a Pytorch Dataset"""
+
+    def __init__(self, file_path, k, task):
+
+        with open(file_path, "rb") as pickle_file:
+            dataset = pickle.load(pickle_file)
+            self.features = np.vstack(dataset[0][k])
+            index = np.random.choice(len(self.features), size=task, replace=False)
+            list_features = []
+            for i in index:
+                list_features.append(self.features[i])
+            self.features = np.array(list_features)
+
+            vector_labels = list()
+            # dataset[1][k]只包含一个数字，所以循环其实只执行了一轮即idx=0，digit=标签
+            for idx, digit in enumerate(dataset[1][k]):
+                # vector_labels += [digit] * len(dataset[0][k][idx])
+                vector_labels += [digit] * task
+
+            self.labels = np.array(vector_labels)
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+
+        # 3D input 1x28x28
+        x = torch.Tensor([self.features[idx]]) / 255
+        y = torch.LongTensor([self.labels[idx]])[0]
+
+        return x, y
+
+
+def get_train_MNIST_shard(train_clients, task_clients, batch_size=100, shuffle=True):
+    """Download for all the clients their respective dataset"""
+    folder = "./data/"
+    file_name_train = f"MNIST_shard_train_100_500.pkl"
+    file_name = folder + file_name_train
+
+    list_dl = list()
+    for k in train_clients:
+        dataset_object = TaskMnistShardDataset(file_name, k, task_clients[k])
+        dataset_dl = DataLoader(
+            dataset_object, batch_size=batch_size, shuffle=shuffle
+        )
+        list_dl.append(dataset_dl)
+
+    return list_dl

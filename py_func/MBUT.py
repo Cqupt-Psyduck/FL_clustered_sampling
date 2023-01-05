@@ -77,12 +77,18 @@ def sample_clients_by_MBUT(clients_attr, clients_samples_num, bal_num, cluster_n
 
     # 给每个平衡簇分配名额
     divide_bal_places = divide_places(medoids["len"], balance_cluster, balance_places)
+    places = divide_bal_places.copy()
 
     # 给每个倾斜簇分配名额
-    divide_tilt_places = divide_places(medoids["len"], tilt_cluster, tilt_places)
+    if tilt_places > 0:
+        divide_tilt_places = divide_places(medoids["len"], tilt_cluster, tilt_places)
+        places.update(divide_tilt_places)
+    else:
+        for index in tilt_cluster:
+            places.update({index: 0})
 
-    places = divide_bal_places.copy()
-    places.update(divide_tilt_places)
+    # places = divide_bal_places.copy()
+    # places.update(divide_tilt_places)
 
     # tilt_clusters_clients_number = np.sum(medoids["len"]) - medoids["len"][balance_cluster]
     # remainder = [0] * cluster_num
@@ -102,8 +108,9 @@ def sample_clients_by_MBUT(clients_attr, clients_samples_num, bal_num, cluster_n
     for j in range(cluster_num):
         cluster_weights.append(np.array([clients_samples_num[client_idx] for client_idx in medoids[j]]))
         cluster_weights[j] = cluster_weights[j] / np.sum(cluster_weights[j])
-        sampled_clients = np.hstack([sampled_clients, np.random.choice(
-            medoids[j], size=int(places[j]), replace=False, p=cluster_weights[j]
-        )])
+        if places[j] > 0:
+            sampled_clients = np.hstack([sampled_clients, np.random.choice(
+                medoids[j], size=int(places[j]), replace=False, p=cluster_weights[j]
+            )])
     sampled_clients = sampled_clients.astype(int)
     return sampled_clients
