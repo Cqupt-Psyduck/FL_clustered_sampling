@@ -193,14 +193,14 @@ if sampling[:5] == "nMBUT" and (
     )
 
 """FEDAVG with UCB sampling"""
-if sampling[:8] == "UCB522" and (
+if sampling[:8] == "nUCB522" and (
         not os.path.exists(f"saved_exp_info/acc/{file_name}.pkl") or force
 ):
-    from py_func.FedProx import FedProx_UCB_MBUT_sampling
+    from py_func.FedProx import FedProx_UCB_sampling
     from py_func.ClassDistribution import get_auxiliary_data_loader
 
     aux_data = get_auxiliary_data_loader(dataset)
-    FedProx_UCB_MBUT_sampling(
+    FedProx_UCB_sampling(
         model_0,
         n_sampled,
         list_dls_train,

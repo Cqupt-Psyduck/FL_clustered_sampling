@@ -15,7 +15,7 @@ import random
 from ClassDistribution import compute_ratio_per_client_update
 from PAMImp import PAM
 from py_func.MBUT import sample_clients_by_MBUT
-from py_func.read_db import get_train_MNIST_shard
+from py_func.read_db import get_train_MNIST_shard, get_train_CIFAR
 from py_func.task_predict import TaskPredict
 
 torch.backends.cudnn.benchmark = True
@@ -950,7 +950,7 @@ def FedProx_MBUT_sampling(
     )
 
 
-def FedProx_UCB_MBUT_sampling(
+def FedProx_UCB_sampling(
         model,
         n_sampled,
         training_sets: list,
@@ -1022,7 +1022,7 @@ def FedProx_UCB_MBUT_sampling(
     clients_task_interval = [[600, 700] for _ in range(50)] + \
                             [[450, 550] for _ in range(25)] + \
                             [[300, 400] for _ in range(25)]
-    tasks_predict = n_samples
+    tasks_predict = deepcopy(n_samples)
     predict_flag = np.zeros((100, 2))
     for i in range(n_iter):
 
@@ -1035,7 +1035,7 @@ def FedProx_UCB_MBUT_sampling(
         # )
 
         # 选择客户端
-        weights = tasks_predict / np.sum(tasks_predict)
+        # weights = tasks_predict / np.sum(tasks_predict)
         sampled_clients = np.random.choice(
             K, size=n_sampled, replace=False, p=weights
         )

@@ -513,7 +513,7 @@ class TaskMnistShardDataset(Dataset):
         return x, y
 
 
-def get_train_MNIST_shard(train_clients, task_clients, batch_size=100, shuffle=True):
+def get_train_MNIST_shard(train_clients, task_clients, batch_size=50, shuffle=True):
     """Download for all the clients their respective dataset"""
     folder = "./data/"
     file_name_train = f"MNIST_shard_train_100_500.pkl"
@@ -522,6 +522,49 @@ def get_train_MNIST_shard(train_clients, task_clients, batch_size=100, shuffle=T
     list_dl = list()
     for k in train_clients:
         dataset_object = TaskMnistShardDataset(file_name, k, task_clients[k])
+        dataset_dl = DataLoader(
+            dataset_object, batch_size=batch_size, shuffle=shuffle
+        )
+        list_dl.append(dataset_dl)
+
+    return list_dl
+
+
+class TaskCIFARDataset(Dataset):
+    """Convert the CIFAR pkl file into a Pytorch Dataset"""
+
+    def __init__(self, file_path: str, k: int, task):
+
+        dataset = pickle.load(open(file_path, "rb"))
+
+        self.X = dataset[0][k]
+        index = np.random.choice(len(self.X), size=task, replace=False)
+        self.X = self.X[index]
+        self.y = np.array(dataset[1][k])
+        self.y = self.y[index]
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx: int):
+
+        # 3D input 32x32x3
+        x = torch.Tensor(self.X[idx]).permute(2, 0, 1) / 255
+        x = (x - 0.5) / 0.5
+        y = self.y[idx]
+
+        return x, y
+
+
+def get_train_CIFAR(train_clients, task_clients, batch_size=50, shuffle=True):
+    """Download for all the clients their respective dataset"""
+    folder = "./data/"
+    file_name_train = f"CIFAR10_nbal_1_train_100.pkl"
+    file_name = folder + file_name_train
+
+    list_dl = list()
+    for k in train_clients:
+        dataset_object = TaskCIFARDataset(file_name, k, task_clients[k])
         dataset_dl = DataLoader(
             dataset_object, batch_size=batch_size, shuffle=shuffle
         )

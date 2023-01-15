@@ -18,7 +18,7 @@ seed = 0
 decay = 1.0
 p = 0.1
 mu = 0.0
-n_iter_plot = 200
+n_iter_plot = 300
 
 
 def get_one_acc_loss(sampling: str, sim_type: str):
@@ -34,8 +34,10 @@ def get_one_acc_loss(sampling: str, sim_type: str):
 def plot_hist_mean(hist: np.array):
     hist_mean = np.average(hist, 1, weights)
     X = np.where(hist_mean > 0)[0]
-    y = hist_mean[X] / 100
-    plt.plot(X, y)
+    X_n = [X[i] for i in range(0, len(X), 1)]
+    X_n = np.array(X_n)
+    y = hist_mean[X_n] / 100
+    plt.plot(X_n, y)
 
 
 def plot_hist_std(hist: np.array):
@@ -53,23 +55,23 @@ def plot_hist_std(hist: np.array):
 
 if __name__ == '__main__':
 
-    # sampling_types = ['target522', 'UCB522', 'drop3']
-    # similarities = ['any', 'any', 'any']
-    # names_legend = ['Target', 'Load-Ada', 'Drop']
+    sampling_types = ['target621', 'nUCB621', 'drop2']
+    similarities = ['any', 'any', 'any']
+    names_legend = ['Target', 'Load-Ada', 'Drop']
 
     # 第二节 初始化数据特征的结果
-    sampling_types = ['nMBUT2-10-0', 'clustered_2', 'clustered_1', 'random', 'FedAvg']
-    similarities = ['any', 'cosine', 'any', 'any', 'any']
-    names_legend = ['MBUT-CS', 'LVIR-MS', 'RBCS-F', 'MD-CS', 'Random']
+    # sampling_types = ['nMBUT2-10-0', 'clustered_2', 'clustered_1', 'random', 'FedAvg1']
+    # similarities = ['any', 'cosine', 'any', 'any', 'any']
+    # names_legend = ['MBUT-CS', 'LVIR-MS', 'RBCS-F', 'MD-CS', 'Random']
 
     # 第二节 首先遍历一遍客户端的结果
-    # sampling_types = ['MBUT2-10-0', 'MBUT2-10-0.2', 'MBUT1-5-0.2', 'clustered_2', 'FedAvg']
+    # sampling_types = ['MBUT2-10-0', 'MBUT2-10-0.2', 'MBUT1-5-0', 'clustered_2', 'FedAvg']
     # similarities = ['any', 'any', 'any', 'cosine', 'any']
-    # names_legend = ['MBUT2-10-0', 'MBUT2-10-0.2', 'MBUT1-5-0.2', 'clustered_2', 'FedAvg']
+    # names_legend = ['MBUT2-10-0', 'MBUT2-10-0.2', 'MBUT1-5-0', 'clustered_2', 'FedAvg']
 
     hists_acc, hists_loss, legend = [], [], []
     for sampling, sampling_type, name in zip(
-        sampling_types, similarities, names_legend
+            sampling_types, similarities, names_legend
     ):
         # 尝试读取拥有相同seed, n_SGD, lr, decay, p, mu值，不同客户端选择方法的acc，loss或者sampled_clients
         try:
@@ -89,21 +91,21 @@ if __name__ == '__main__':
 
     plt.figure()
     # 画acc的图
-    # for hist in hists_acc:
-    #     plot_hist_mean(hist[:n_iter_plot])
-    #     plot_hist_std(hist[:n_iter_plot])
+    for hist in hists_acc:
+        plot_hist_mean(hist[:n_iter_plot])
+        # plot_hist_std(hist[:n_iter_plot])
 
     # 画loss的图
-    for hist in hists_loss:
-        # plot_hist_mean(hist[:n_iter_plot])
-        plot_hist_std(hist[:n_iter_plot])
+    # for hist in hists_loss:
+    # plot_hist_mean(hist[:n_iter_plot])
+    # plot_hist_std(hist[:n_iter_plot])
 
     # 设置坐标刻度字体大小
     plt.xticks(fontsize=10)
     plt.yticks(fontsize=10)
     plt.xlabel("Global Rounds", fontsize=10)
-    plt.ylabel("Std Loss", fontsize=10)
-    plt.legend(names_legend)
+    plt.ylabel("Mean Accuracy", fontsize=10)
+    plt.legend(names_legend, loc=4)
     plt.show()
 
 # if __name__ == '__main__':

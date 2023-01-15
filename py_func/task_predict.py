@@ -53,7 +53,7 @@ if __name__ == '__main__':
     real = np.zeros(1000)
     predict = np.zeros(1000)
     first = np.zeros(1000)
-    task_real = np.random.randint(600, 800, 1)[0]
+    task_real = np.random.randint(600, 700, 1)[0]
     a.init_param(task_real)
     num = 0
     num_failure = 0
@@ -62,14 +62,14 @@ if __name__ == '__main__':
     for i in range(1000):
         predict[i] = a.predict_task()
         first[i] = a.get_first()
-        task_real = np.random.randint(600, 800, 1)[0]
+        task_real = np.random.randint(600, 700, 1)[0]
         a.update_params(task_real)
         real[i] = task_real
         if predict[i] > real[i]:
             # 除数值为：下限除以区间大小乘以10 最好
             # a.update_params(predict[i]/((min / (max - min + 1)) * 100))
             num_failure = num_failure + 1
-            a.update_params(predict[i]/(num_failure * 10))
+            a.update_params(predict[i]/(num_failure * 2))
         else:
             num = num + 1
             a.update_params(task_real)
